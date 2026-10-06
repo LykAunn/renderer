@@ -24,14 +24,15 @@ void draw_line(TGAImage& framebuffer,int x1, int y1, int x2, int y2, TGAColor co
     int dx = x2 - x1;
     int dy = y2 - y1;
 
+    float y = y1;
+    float constant = (y2-y1) / static_cast<float>(x2-x1);
     for (int x = x1; x < x2; x++) {
-        float t = (x - x1) / static_cast<float> (x2 - x1);
-        float y = y1 + (t * (y2 - y1));
         if (steep) {
             framebuffer.set(y, x, color);
         } else {
             framebuffer.set(x, y, color);
         }
+        y += constant;
     }
 }
 
@@ -48,16 +49,16 @@ int main(int argc, char** argv) {
     framebuffer.set(bx, by, white);
     framebuffer.set(cx, cy, white);
     
-    // draw_line(framebuffer, ax, ay, bx, by, blue);
-    // draw_line(framebuffer, ax, ay, cx, cy, red);
-    // draw_line(framebuffer, cx, cy, bx, by, green);
+    draw_line(framebuffer, ax, ay, bx, by, blue);
+    draw_line(framebuffer, ax, ay, cx, cy, red);
+    draw_line(framebuffer, cx, cy, bx, by, green);
 
-    std::srand(std::time({}));
-    for (int i=0; i<(1<<24); i++) {
-        int ax = rand()%width, ay = rand()%height;
-        int bx = rand()%width, by = rand()%height;
-        draw_line(framebuffer, ax, ay, bx, by, { static_cast<uint8_t>(rand()%255), static_cast<uint8_t>(rand()%255), static_cast<uint8_t>(rand()%255), static_cast<uint8_t>(rand()%255) });
-    }
+    // std::srand(std::time({}));
+    // for (int i=0; i<(1<<24); i++) {
+    //     int ax = rand()%width, ay = rand()%height;
+    //     int bx = rand()%width, by = rand()%height;
+    //     draw_line(framebuffer, ax, ay, bx, by, { static_cast<uint8_t>(rand()%255), static_cast<uint8_t>(rand()%255), static_cast<uint8_t>(rand()%255), static_cast<uint8_t>(rand()%255) });
+    // }
 
     framebuffer.write_tga_file("framebuffer.tga");
     return 0;
