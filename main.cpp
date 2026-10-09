@@ -35,13 +35,39 @@ void draw_line(TGAImage& framebuffer,int x1, int y1, int x2, int y2, TGAColor co
         }
         ierror += 2 * dy;
         if (ierror > dx) {
-            y += y2 > y1 ? 1 : -1;
+            y += (y2 > y1 ? 1 : -1);
             ierror -= 2 * dx;
         }
     }
 }
 
-void draw_rectangle(TGAImage& framebuffer, Vec3v v1, Vec3v v2, Vec3v v3, int width, int height) {
+void draw_triangle(TGAImage& framebuffer, int x1, int y1, int x2, int y2, int x3, int y3, TGAColor color) {
+    if (y1 > y2) { std::swap(y1, y2); std::swap(x1, x2);}
+    if (y1 > y3) { std::swap(y1, y3); std::swap(x1, x3);}
+    if (y2 > y3) { std::swap(y2, y3); std::swap(x2, x3);}
+
+    for (int y = y1; y <= y2; y++) {
+        float a = static_cast<float>((y - y1)) / (y3 - y1); // Progress on long line
+        int xa = static_cast<int>(x1 + ((x3 - x1) * a)); // x of long line
+
+        float b = static_cast<float>((y - y1)) / (y2 - y1); // Progress on short line
+        int xb = static_cast<int>(x1 + ((x2 - x1) * b)); // x of short line
+
+        draw_line(framebuffer, xa, y, xb, y, color);
+    }
+
+    for (int y = y2; y <= y3; y++) {
+        float a = static_cast<float>((y - y1)) / (y3 - y1); // Progress on long line
+        int xa = static_cast<int>(x1 + ((x3 - x1) * a)); // x of long line
+
+        float b = static_cast<float>((y - y2)) / (y3 - y2);
+        int xb = static_cast<int>(x2 + ((x3 - x2) * b));
+
+        draw_line(framebuffer, xa, y, xb, y, color);
+    }
+}
+
+void outline_triangle(TGAImage& framebuffer, Vec3v v1, Vec3v v2, Vec3v v3, int width, int height) {
     Vec3v v[3] = {v1, v2, v3};
     int vx[3], vy[3];
     for (int i = 0; i < 3; i ++) {
@@ -55,9 +81,15 @@ void draw_rectangle(TGAImage& framebuffer, Vec3v v1, Vec3v v2, Vec3v v3, int wid
     
 }
 
+void draw_raw_rectangle(TGAImage& framebuffer, int x1, int y1, int x2, int y2, int x3, int y3, TGAColor color) {
+    draw_line(framebuffer, x1, y1, x2, y2, color);
+    draw_line(framebuffer, x1, y1, x3, y3, color);
+    draw_line(framebuffer, x3, y3, x2, y2, color);
+}
+
 int main(int argc, char** argv) {
-    constexpr int width  = 1024;
-    constexpr int height = 1024;
+    constexpr int width  = 128;
+    constexpr int height = 128;
     TGAImage framebuffer(width, height, TGAImage::RGB);
     Parser object_parser = Parser();
 
@@ -65,19 +97,23 @@ int main(int argc, char** argv) {
     int bx = 12, by = 37;
     int cx = 62, cy = 53;
 
+    draw_triangle(framebuffer,  7, 45, 35, 100, 45,  60, red);
+    draw_triangle(framebuffer, 120, 35, 90,   5, 45, 110, white);
+    draw_triangle(framebuffer, 115, 83, 80,  90, 85, 120, green);
+
     // framebuffer.set(ax, ay, white);
     // framebuffer.set(bx, by, white);
     // framebuffer.set(cx, cy, white);
 
-    object_parser.load("./diablo3_pose.obj");
+    // object_parser.load("./diablo3_pose.obj");
     // object_parser.load("./african_head.obj");
 
 
-    for (Vec3f triangle : object_parser.faces) {
-        draw_rectangle(framebuffer, object_parser.vertices[triangle.v0],
-             object_parser.vertices[triangle.v1], object_parser.vertices[triangle.v2]
-            , width, height);
-    }
+    // for (Vec3f triangle : object_parser.faces) {
+    //     draw_rectangle(framebuffer, object_parser.vertices[triangle.v0],
+    //          object_parser.vertices[triangle.v1], object_parser.vertices[triangle.v2]
+    //         , width, height);
+    // }
     
     // draw_line(framebuffer, ax, ay, bx, by, blue);
     // draw_line(framebuffer, ax, ay, cx, cy, red);
