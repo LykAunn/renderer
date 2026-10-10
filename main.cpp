@@ -41,7 +41,7 @@ void draw_line(TGAImage& framebuffer,int x1, int y1, int x2, int y2, TGAColor co
     }
 }
 
-void draw_triangle(TGAImage& framebuffer, int x1, int y1, int x2, int y2, int x3, int y3, TGAColor color) {
+void draw_triangle_scan(TGAImage& framebuffer, int x1, int y1, int x2, int y2, int x3, int y3, TGAColor color) {
     if (y1 > y2) { std::swap(y1, y2); std::swap(x1, x2);}
     if (y1 > y3) { std::swap(y1, y3); std::swap(x1, x3);}
     if (y2 > y3) { std::swap(y2, y3); std::swap(x2, x3);}
@@ -64,6 +64,41 @@ void draw_triangle(TGAImage& framebuffer, int x1, int y1, int x2, int y2, int x3
         int xb = static_cast<int>(x2 + ((x3 - x2) * b));
 
         draw_line(framebuffer, xa, y, xb, y, color);
+    }
+}
+
+void draw_bounding_box(TGAImage& framebuffer, int x1, int y1, int x2, int y2, int x3, int y3, TGAColor color ) {
+    int min_x = std::min({x1, x2, x3});
+    int min_y = std::min({y1, y2, y3});
+
+    int max_x = std::max({x1, x2, x3});
+    int max_y = std::max({y1, y2, y3});
+
+    for (int y = min_y; y <= max_y; y++) {
+        draw_line(framebuffer, min_x, y, max_x, y, color);
+    }
+}
+
+void draw_triangle(TGAImage& framebuffer, int x1, int y1, int x2, int y2, int x3, int y3, TGAColor color) {
+    float min_x = std::min({x1, x2, x3});
+    float min_y = std::min({y1, y2, y3});
+
+    float max_x = std::max({x1, x2, x3});
+    float max_y = std::max({y1, y2, y3});
+
+    for (int x = min_x; x <= max_x; x++) {
+        for (int y = min_y; y <= max_y; y++) {
+            float det = static_cast<float>((x2 - x1) * (y3 - y1) - (y2 - y1) * (x3 - x1));
+            float uAC = ((x2 - x1) * (y - y1) - (y2 - y1) * (x - x1)) / det;
+
+            float uAB = ((x - x1) * (y3 - y1) - (y - y1) * (x3 - x1)) / det;
+
+            float u = 1 - (uAB + uAC);
+            
+            if (uAC > 0 && uAB > 0 && u > 0) {
+                framebuffer.set(x, y, color);
+            }
+        }
     }
 }
 
@@ -105,12 +140,12 @@ int main(int argc, char** argv) {
     // framebuffer.set(bx, by, white);
     // framebuffer.set(cx, cy, white);
 
-    // object_parser.load("./diablo3_pose.obj");
+    object_parser.load("./diablo3_pose.obj");
     // object_parser.load("./african_head.obj");
 
 
     // for (Vec3f triangle : object_parser.faces) {
-    //     draw_rectangle(framebuffer, object_parser.vertices[triangle.v0],
+    //     outline_triangle(framebuffer, object_parser.vertices[triangle.v0],
     //          object_parser.vertices[triangle.v1], object_parser.vertices[triangle.v2]
     //         , width, height);
     // }
