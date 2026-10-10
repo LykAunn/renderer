@@ -3,6 +3,19 @@
 #include <ctime>
 #include "tgaimage.h"
 #include "objParser.cpp"
+#include <random>
+
+TGAColor random_color() {
+    static std::mt19937 rng(std::random_device{}());
+    static std::uniform_int_distribution<int> dist(0, 255);
+
+    return TGAColor{
+        static_cast<std::uint8_t>(dist(rng)), // R
+        static_cast<std::uint8_t>(dist(rng)), // G
+        static_cast<std::uint8_t>(dist(rng)), // B
+        255                                  // Alpha
+    };
+}
 
 constexpr TGAColor white   = {255, 255, 255, 255}; // attention, BGRA order
 constexpr TGAColor green   = {  0, 255,   0, 255};
@@ -80,26 +93,41 @@ void draw_bounding_box(TGAImage& framebuffer, int x1, int y1, int x2, int y2, in
 }
 
 void draw_triangle(TGAImage& framebuffer, int x1, int y1, int x2, int y2, int x3, int y3, TGAColor color) {
-    float min_x = std::min({x1, x2, x3});
-    float min_y = std::min({y1, y2, y3});
+    float det = static_cast<float>((x2 - x1) * (y3 - y1) - (y2 - y1) * (x3 - x1));
 
-    float max_x = std::max({x1, x2, x3});
-    float max_y = std::max({y1, y2, y3});
+    if (std::abs(det) < 1e-3f) return;
+    float inv_det = 1.0f / det;
 
-    for (int x = min_x; x <= max_x; x++) {
-        for (int y = min_y; y <= max_y; y++) {
-            float det = static_cast<float>((x2 - x1) * (y3 - y1) - (y2 - y1) * (x3 - x1));
-            float uAC = ((x2 - x1) * (y - y1) - (y2 - y1) * (x - x1)) / det;
+    float min_x = std::max(0, std::min({x1, x2, x3}));
+    float max_x = std::min(framebuffer.width() - 1, std::max({x1, x2, x3}));
+    
+    float min_y = std::max(0, std::min({y1, y2, y3}));
+    float max_y = std::min(framebuffer.width() - 1, std::max({y1, y2, y3}));
 
-            float uAB = ((x - x1) * (y3 - y1) - (y - y1) * (x3 - x1)) / det;
+    for (int y = min_y; y <= max_y; y++) {
+        for (int x = min_x; x <= max_x; x++) {
+            float uAC = ((x2 - x1) * (y - y1) - (y2 - y1) * (x - x1)) * inv_det;
+
+            float uAB = ((x - x1) * (y3 - y1) - (y - y1) * (x3 - x1)) * inv_det;
 
             float u = 1 - (uAB + uAC);
             
-            if (uAC > 0 && uAB > 0 && u > 0) {
+            if (uAC >= 0.0f && uAB >= 0.0f && u >= 0.0f) {
                 framebuffer.set(x, y, color);
             }
         }
     }
+}
+
+void draw_object(TGAImage& framebuffer, Vec3v v1, Vec3v v2, Vec3v v3, int width, int height) {
+    Vec3v v[3] = {v1, v2, v3};
+    int vx[3], vy[3];
+    for (int i = 0; i < 3; i ++) {
+        vx[i] = static_cast<int>(((v[i].x + 1 )* width) / 2);
+        vy[i] = static_cast<int>(((v[i].y + 1) * width) / 2);
+    }
+
+    draw_triangle(framebuffer, vx[0], vy[0], vx[1], vy[1], vx[2], vy[2], random_color());
 }
 
 void outline_triangle(TGAImage& framebuffer, Vec3v v1, Vec3v v2, Vec3v v3, int width, int height) {
@@ -123,8 +151,8 @@ void draw_raw_rectangle(TGAImage& framebuffer, int x1, int y1, int x2, int y2, i
 }
 
 int main(int argc, char** argv) {
-    constexpr int width  = 128;
-    constexpr int height = 128;
+    constexpr int width  = 1024;
+    constexpr int height = 1024;
     TGAImage framebuffer(width, height, TGAImage::RGB);
     Parser object_parser = Parser();
 
@@ -132,23 +160,22 @@ int main(int argc, char** argv) {
     int bx = 12, by = 37;
     int cx = 62, cy = 53;
 
-    draw_triangle(framebuffer,  7, 45, 35, 100, 45,  60, red);
-    draw_triangle(framebuffer, 120, 35, 90,   5, 45, 110, white);
-    draw_triangle(framebuffer, 115, 83, 80,  90, 85, 120, green);
+    // draw_triangle(framebuffer,  7, 45, 35, 100, 45,  60, red);
+    // draw_triangle(framebuffer, 120, 35, 90,   5, 45, 110, white);
+    // draw_triangle(framebuffer, 115, 83, 80,  90, 85, 120, green);
 
     // framebuffer.set(ax, ay, white);
     // framebuffer.set(bx, by, white);
     // framebuffer.set(cx, cy, white);
 
-    object_parser.load("./diablo3_pose.obj");
-    // object_parser.load("./african_head.obj");
+    // object_parser.load("./diablo3_pose.obj");
+    object_parser.load("./african_head.obj");
 
-
-    // for (Vec3f triangle : object_parser.faces) {
-    //     outline_triangle(framebuffer, object_parser.vertices[triangle.v0],
-    //          object_parser.vertices[triangle.v1], object_parser.vertices[triangle.v2]
-    //         , width, height);
-    // }
+    for (Vec3f triangle : object_parser.faces) {
+        draw_object(framebuffer, object_parser.vertices[triangle.v0],
+             object_parser.vertices[triangle.v1], object_parser.vertices[triangle.v2]
+            , width, height);
+    }
     
     // draw_line(framebuffer, ax, ay, bx, by, blue);
     // draw_line(framebuffer, ax, ay, cx, cy, red);
