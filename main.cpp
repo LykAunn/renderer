@@ -7,6 +7,11 @@
 #include "vec3.cpp"
 #include "matrix.cpp"
 
+constexpr int width = 800;
+constexpr int height = 800;
+
+mat<4,4> ModelView, Viewport, Perspective;
+
 TGAColor random_color() {
     static std::mt19937 rng(std::random_device{}());
     static std::uniform_int_distribution<int> dist(0, 255);
@@ -38,73 +43,31 @@ vec3 rot(vec3 vector) {
     return Ry * vector;
 }
 
-void draw_line(TGAImage& framebuffer,int x1, int y1, int x2, int y2, TGAColor color) {
-    bool steep = std::abs(x1-x2) < std::abs(y1 - y2);
-
-    if (steep) { // If line is steep, transpose x and y
-        std::swap(x1, y1);
-        std::swap(x2, y2);
-    }
-
-    if (x1 > x2) { // Swap start and end points
-        std::swap(x1,x2);
-        std::swap(y1, y2);
-    }
-    int dx = x2 - x1;
-    int dy = std::abs(y2 - y1);
-
-    int y = y1;
-    int ierror = 0;
-    for (int x = x1; x < x2; x++) {
-        if (steep) {
-            framebuffer.set(y, x, color);
-        } else {
-            framebuffer.set(x, y, color);
-        }
-        ierror += 2 * dy;
-        if (ierror > dx) {
-            y += (y2 > y1 ? 1 : -1);
-            ierror -= 2 * dx;
-        }
-    }
+vec3 persp(vec3 v) {
+    const double c = 3;
+    return v / (1 - v.z / c);
 }
 
-void draw_triangle_scan(TGAImage& framebuffer, int x1, int y1, int x2, int y2, int x3, int y3, TGAColor color) {
-    if (y1 > y2) { std::swap(y1, y2); std::swap(x1, x2);}
-    if (y1 > y3) { std::swap(y1, y3); std::swap(x1, x3);}
-    if (y2 > y3) { std::swap(y2, y3); std::swap(x2, x3);}
-
-    for (int y = y1; y <= y2; y++) {
-        float a = static_cast<float>((y - y1)) / (y3 - y1); // Progress on long line
-        int xa = static_cast<int>(x1 + ((x3 - x1) * a)); // x of long line
-
-        float b = static_cast<float>((y - y1)) / (y2 - y1); // Progress on short line
-        int xb = static_cast<int>(x1 + ((x2 - x1) * b)); // x of short line
-
-        draw_line(framebuffer, xa, y, xb, y, color);
-    }
-
-    for (int y = y2; y <= y3; y++) {
-        float a = static_cast<float>((y - y1)) / (y3 - y1); // Progress on long line
-        int xa = static_cast<int>(x1 + ((x3 - x1) * a)); // x of long line
-
-        float b = static_cast<float>((y - y2)) / (y3 - y2);
-        int xb = static_cast<int>(x2 + ((x3 - x2) * b));
-
-        draw_line(framebuffer, xa, y, xb, y, color);
-    }
+void perspective(const double f) {
+    Perspective = {{{1, 0, 0, 0}, {0, 1, 0, 0}, {0, 0, 1, 0}, {0, 0, -1/f, 1}}};
 }
 
-void draw_bounding_box(TGAImage& framebuffer, int x1, int y1, int x2, int y2, int x3, int y3, TGAColor color ) {
-    int min_x = std::min({x1, x2, x3});
-    int min_y = std::min({y1, y2, y3});
+vec3 project(vec3 v) {
+    return { (v.x + 1.) * width / 2,
+             (v.y + 1.) * height / 2,
+             (v.z + 1.) * 255./2 };
+}
 
-    int max_x = std::max({x1, x2, x3});
-    int max_y = std::max({y1, y2, y3});
+void viewport(const int x, const int y, const int w, const int h) {
+    Viewport = {{{w/2., 0, 0, x+w/2.}, {0, h/2., 0, y+h/2.}, {0,0,1,0}, {0,0,0,1}}};
+}
 
-    for (int y = min_y; y <= max_y; y++) {
-        draw_line(framebuffer, min_x, y, max_x, y, color);
-    }
+void lookat(const vec3 eye, const vec3 center, const vec3 up) {
+    vec3 n = normalised(eye - center);
+    vec3 l = normalised(cross(up, n));
+    vec3 m = normalised(cross(n, l));
+    ModelView = mat<4,4>{{{l.x, l.y, l.z, 0}, {m.x, m.y, m.z, 0}, {n.x, n.y, n.z, 0}, {0, 0, 0, 1}}} *
+                mat<4, 4>{{{1, 0, 0, -center.x}, {0, 1, 0, -center.y}, {0, 0, 1, -center.z}, {0, 0, 0, 1}}};
 }
 
 void draw_triangle(TGAImage& framebuffer, int x1, int y1, int z1, int x2, int y2, int z2, int x3, int y3, int z3, TGAImage& zbuffer, TGAColor color) {
@@ -138,42 +101,20 @@ void draw_triangle(TGAImage& framebuffer, int x1, int y1, int z1, int x2, int y2
     }
 }
 
-void draw_object(TGAImage& framebuffer, vec3 v1, vec3 v2, vec3 v3, int width, int height, TGAImage& zbuffer) {
+void draw_object(TGAImage& framebuffer, vec3 v1, vec3 v2, vec3 v3, TGAImage& zbuffer) {
     vec3 v[3] = {v1, v2, v3};
     int vx[3], vy[3], vz[3];
     for (int i = 0; i < 3; i ++) {
-        v[i] = rot(v[i]);
-        vx[i] = static_cast<int>(((v[i].x + 1 )* width) / 2);
-        vy[i] = static_cast<int>(((v[i].y + 1) * width) / 2);
-        vz[i] = static_cast<int>((v[i].z + 1) * 255./2);
+        v[i] = project(persp(rot(v[i])));
+        vx[i] = static_cast<int>(v[i].x);
+        vy[i] = static_cast<int>(v[i].y);
+        vz[i] = static_cast<int>(v[i].z);
     }
 
     draw_triangle(framebuffer, vx[0], vy[0],vz[0], vx[1], vy[1], vz[1], vx[2], vy[2], vz[2], zbuffer, random_color());
 }
 
-void outline_triangle(TGAImage& framebuffer, vec3 v1, vec3 v2, vec3 v3, int width, int height) {
-    vec3 v[3] = {v1, v2, v3};
-    int vx[3], vy[3];
-    for (int i = 0; i < 3; i ++) {
-        vx[i] = static_cast<int>(((v[i].x + 1 )* width) / 2);
-        vy[i] = static_cast<int>(((v[i].y + 1) * width) / 2);
-    }
-
-    draw_line(framebuffer, vx[0], vy[0], vx[1], vy[1], blue);
-    draw_line(framebuffer, vx[2], vy[2], vx[1], vy[1], blue);
-    draw_line(framebuffer, vx[0], vy[0], vx[2], vy[2], blue);
-    
-}
-
-void draw_raw_rectangle(TGAImage& framebuffer, int x1, int y1, int x2, int y2, int x3, int y3, TGAColor color) {
-    draw_line(framebuffer, x1, y1, x2, y2, color);
-    draw_line(framebuffer, x1, y1, x3, y3, color);
-    draw_line(framebuffer, x3, y3, x2, y2, color);
-}
-
 int main(int argc, char** argv) {
-    constexpr int width  = 1024;
-    constexpr int height = 1024;
     TGAImage framebuffer(width, height, TGAImage::RGB);
     TGAImage zbuffer(width, height, TGAImage::GRAYSCALE);
 
@@ -191,13 +132,13 @@ int main(int argc, char** argv) {
     // framebuffer.set(bx, by, white);
     // framebuffer.set(cx, cy, white);
 
-    // object_parser.load("./diablo3_pose.obj");
-    object_parser.load("./african_head.obj");
+    object_parser.load("./diablo3_pose.obj");
+    // object_parser.load("./african_head.obj");
 
     for (Vec3f triangle : object_parser.faces) {
         draw_object(framebuffer, object_parser.vertices[triangle.v0],
              object_parser.vertices[triangle.v1], object_parser.vertices[triangle.v2]
-            , width, height, zbuffer);
+            , zbuffer);
     }
     
     // draw_line(framebuffer, ax, ay, bx, by, blue);
