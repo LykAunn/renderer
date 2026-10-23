@@ -92,7 +92,7 @@ void draw_bounding_box(TGAImage& framebuffer, int x1, int y1, int x2, int y2, in
     }
 }
 
-void draw_triangle(TGAImage& framebuffer, int x1, int y1, int x2, int y2, int x3, int y3, TGAColor color) {
+void draw_triangle(TGAImage& framebuffer, int x1, int y1, int z1, int x2, int y2, int z2, int x3, int y3, int z3, TGAImage& zbuffer, TGAColor color) {
     float det = static_cast<float>((x2 - x1) * (y3 - y1) - (y2 - y1) * (x3 - x1));
 
     if (std::abs(det) < 1e-3f) return;
@@ -113,21 +113,26 @@ void draw_triangle(TGAImage& framebuffer, int x1, int y1, int x2, int y2, int x3
             float u = 1 - (uAB + uAC);
             
             if (uAC >= 0.0f && uAB >= 0.0f && u >= 0.0f) {
-                framebuffer.set(x, y, color);
+                unsigned char z = static_cast<unsigned char>(u * z1 + uAB * z2 + uAC * z3);
+                if (z > zbuffer.get(x, y)[0]) {
+                    zbuffer.set(x, y, {z});
+                    framebuffer.set(x, y, color);
+                }
             }
         }
     }
 }
 
-void draw_object(TGAImage& framebuffer, Vec3v v1, Vec3v v2, Vec3v v3, int width, int height) {
+void draw_object(TGAImage& framebuffer, Vec3v v1, Vec3v v2, Vec3v v3, int width, int height, TGAImage& zbuffer) {
     Vec3v v[3] = {v1, v2, v3};
-    int vx[3], vy[3];
+    int vx[3], vy[3], vz[3];
     for (int i = 0; i < 3; i ++) {
         vx[i] = static_cast<int>(((v[i].x + 1 )* width) / 2);
         vy[i] = static_cast<int>(((v[i].y + 1) * width) / 2);
+        vz[i] = static_cast<int>((v[i].z + 1) * 255./2);
     }
 
-    draw_triangle(framebuffer, vx[0], vy[0], vx[1], vy[1], vx[2], vy[2], random_color());
+    draw_triangle(framebuffer, vx[0], vy[0],vz[0], vx[1], vy[1], vz[1], vx[2], vy[2], vz[2], zbuffer, random_color());
 }
 
 void outline_triangle(TGAImage& framebuffer, Vec3v v1, Vec3v v2, Vec3v v3, int width, int height) {
@@ -154,6 +159,8 @@ int main(int argc, char** argv) {
     constexpr int width  = 1024;
     constexpr int height = 1024;
     TGAImage framebuffer(width, height, TGAImage::RGB);
+    TGAImage zbuffer(width, height, TGAImage::GRAYSCALE);
+
     Parser object_parser = Parser();
 
     int ax =  7, ay =  3;
@@ -174,7 +181,7 @@ int main(int argc, char** argv) {
     for (Vec3f triangle : object_parser.faces) {
         draw_object(framebuffer, object_parser.vertices[triangle.v0],
              object_parser.vertices[triangle.v1], object_parser.vertices[triangle.v2]
-            , width, height);
+            , width, height, zbuffer);
     }
     
     // draw_line(framebuffer, ax, ay, bx, by, blue);
@@ -189,5 +196,6 @@ int main(int argc, char** argv) {
     // }
 
     framebuffer.write_tga_file("framebuffer.tga");
+    zbuffer.write_tga_file("zbuffer.tga");
     return 0;
 }
