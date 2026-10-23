@@ -58,6 +58,15 @@ mat<rows, cols> scalar_mul(mat<rows, cols> matrix, double val) {
 typedef mat<3,3> mat3;
 typedef mat<4,4> mat4;
 
+template<int R, int C>
+vec<R> operator*(const mat<R, C>& m, const vec<C>& v) {
+    vec<R> res;
+    for (int r = 0; r < R; r ++) {
+        res[r] = dot(m[r], v);
+    }
+    return res;
+}
+
 template<int R, int K, int C>
 mat<R, C> operator*(const mat<R, K>& left, const mat<K,C>& right) {
     mat<R, C> res;
@@ -235,6 +244,6 @@ void test_matrix_multiplication() {
     print_matrix(e);
 }
 
-int main() {
-    test_matrix_multiplication();
-}
+// int main() {
+//     test_matrix_multiplication();
+// }

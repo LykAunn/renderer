@@ -2,10 +2,7 @@
 #include <string>
 #include <iostream>
 #include <sstream>
-
-struct Vec3v {
-    float x, y, z;
-};
+#include "vec3.cpp"
 
 struct Vec3f {
     int v0, v1, v2;
@@ -13,7 +10,7 @@ struct Vec3f {
 
 class Parser {
 public:
-    std::vector<Vec3v> vertices;
+    std::vector<vec3> vertices;
     std::vector<Vec3f> faces;
 
     Parser() = default;
@@ -37,7 +34,7 @@ public:
             if (token == "v") {
                 float x,y,z;
                 if (iss >> x >> y >> z) {
-                    vertices.push_back({x, y, z});
+                    vertices.push_back(vec3{x, y, z});
                 }
 
             } else if (token == "f") {

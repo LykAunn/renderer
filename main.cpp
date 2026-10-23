@@ -4,6 +4,8 @@
 #include "tgaimage.h"
 #include "objParser.cpp"
 #include <random>
+#include "vec3.cpp"
+#include "matrix.cpp"
 
 TGAColor random_color() {
     static std::mt19937 rng(std::random_device{}());
@@ -22,6 +24,19 @@ constexpr TGAColor green   = {  0, 255,   0, 255};
 constexpr TGAColor red     = {  0,   0, 255, 255};
 constexpr TGAColor blue    = {255, 128,  64, 255};
 constexpr TGAColor yellow  = {  0, 200, 255, 255};
+
+vec3 rot(vec3 vector) {
+    const double a = M_PI / 6.0;
+    const double c = std::cos(a);
+    const double s = std::sin(a);
+
+    mat3 Ry;
+    Ry[0] = vec3{ c, 0.0, s };
+    Ry[1] = vec3{ 0.0, 1.0, 0.0 };
+    Ry[2] = vec3{ -s, 0.0, s };
+
+    return Ry * vector;
+}
 
 void draw_line(TGAImage& framebuffer,int x1, int y1, int x2, int y2, TGAColor color) {
     bool steep = std::abs(x1-x2) < std::abs(y1 - y2);
@@ -123,10 +138,11 @@ void draw_triangle(TGAImage& framebuffer, int x1, int y1, int z1, int x2, int y2
     }
 }
 
-void draw_object(TGAImage& framebuffer, Vec3v v1, Vec3v v2, Vec3v v3, int width, int height, TGAImage& zbuffer) {
-    Vec3v v[3] = {v1, v2, v3};
+void draw_object(TGAImage& framebuffer, vec3 v1, vec3 v2, vec3 v3, int width, int height, TGAImage& zbuffer) {
+    vec3 v[3] = {v1, v2, v3};
     int vx[3], vy[3], vz[3];
     for (int i = 0; i < 3; i ++) {
+        v[i] = rot(v[i]);
         vx[i] = static_cast<int>(((v[i].x + 1 )* width) / 2);
         vy[i] = static_cast<int>(((v[i].y + 1) * width) / 2);
         vz[i] = static_cast<int>((v[i].z + 1) * 255./2);
@@ -135,8 +151,8 @@ void draw_object(TGAImage& framebuffer, Vec3v v1, Vec3v v2, Vec3v v3, int width,
     draw_triangle(framebuffer, vx[0], vy[0],vz[0], vx[1], vy[1], vz[1], vx[2], vy[2], vz[2], zbuffer, random_color());
 }
 
-void outline_triangle(TGAImage& framebuffer, Vec3v v1, Vec3v v2, Vec3v v3, int width, int height) {
-    Vec3v v[3] = {v1, v2, v3};
+void outline_triangle(TGAImage& framebuffer, vec3 v1, vec3 v2, vec3 v3, int width, int height) {
+    vec3 v[3] = {v1, v2, v3};
     int vx[3], vy[3];
     for (int i = 0; i < 3; i ++) {
         vx[i] = static_cast<int>(((v[i].x + 1 )* width) / 2);
