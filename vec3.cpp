@@ -80,6 +80,16 @@ double dot(const vec<n>& left, const vec<n>& right) {
     return res;
 }
 
+template<int n> double norm(const vec<n>& v) {
+    return std::sqrt(dot(v, v));
+}
+
+template<int n> vec<n> normalised(const vec<n>& v) {
+    double l = norm(v);
+    assert(l > 0.0);
+    return v / l;
+}
+
 vec<3> cross(const vec<3>& left, const vec<3>& right) {
     return vec3 {
         left.y * right.z - left.z * right.y,

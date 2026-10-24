@@ -9,8 +9,19 @@
 
 constexpr int width = 800;
 constexpr int height = 800;
+std::vector<double> zbuffer(width * height, -std::numeric_limits<double>::max());
 
 mat<4,4> ModelView, Viewport, Perspective;
+
+void set_zbuffer(int x, int y, double val) {
+    int index = y * width + x;
+    zbuffer[index] = val;
+}
+
+double get_zbuffer(int x, int y) {
+    int index = y * width + x;
+    return zbuffer[index];
+}
 
 TGAColor random_color() {
     static std::mt19937 rng(std::random_device{}());
@@ -70,14 +81,14 @@ void lookat(const vec3 eye, const vec3 center, const vec3 up) {
                 mat<4, 4>{{{1, 0, 0, -center.x}, {0, 1, 0, -center.y}, {0, 0, 1, -center.z}, {0, 0, 0, 1}}};
 }
 
-void draw_triangle(TGAImage& framebuffer, int x1, int y1, int z1, int x2, int y2, int z2, int x3, int y3, int z3, TGAImage& zbuffer, TGAColor color) {
+void draw_triangle(TGAImage& framebuffer, int x1, int y1, int z1, int x2, int y2, int z2, int x3, int y3, int z3, TGAColor color) {
     float det = static_cast<float>((x2 - x1) * (y3 - y1) - (y2 - y1) * (x3 - x1));
 
-    if (std::abs(det) < 1e-3f) return;
+    if (std::abs(det) < 1e-3f) return; // backface culling + discarding triangle that cover less than 1 pixel
     float inv_det = 1.0f / det;
 
-    float min_x = std::max(0, std::min({x1, x2, x3}));
-    float max_x = std::min(framebuffer.width() - 1, std::max({x1, x2, x3}));
+    float min_x = std::max(0, std::min({x1, x2, x3})); // bounding box for triangle
+    float max_x = std::min(framebuffer.width() - 1, std::max({x1, x2, x3})); // top left and bottom right
     
     float min_y = std::max(0, std::min({y1, y2, y3}));
     float max_y = std::min(framebuffer.width() - 1, std::max({y1, y2, y3}));
@@ -92,8 +103,8 @@ void draw_triangle(TGAImage& framebuffer, int x1, int y1, int z1, int x2, int y2
             
             if (uAC >= 0.0f && uAB >= 0.0f && u >= 0.0f) {
                 unsigned char z = static_cast<unsigned char>(u * z1 + uAB * z2 + uAC * z3);
-                if (z > zbuffer.get(x, y)[0]) {
-                    zbuffer.set(x, y, {z});
+                if (z > get_zbuffer(x, y)) {
+                    set_zbuffer(x, y, z);
                     framebuffer.set(x, y, color);
                 }
             }
@@ -101,7 +112,7 @@ void draw_triangle(TGAImage& framebuffer, int x1, int y1, int z1, int x2, int y2
     }
 }
 
-void draw_object(TGAImage& framebuffer, vec3 v1, vec3 v2, vec3 v3, TGAImage& zbuffer) {
+void draw_object(TGAImage& framebuffer, vec3 v1, vec3 v2, vec3 v3) {
     vec3 v[3] = {v1, v2, v3};
     int vx[3], vy[3], vz[3];
     for (int i = 0; i < 3; i ++) {
@@ -111,48 +122,30 @@ void draw_object(TGAImage& framebuffer, vec3 v1, vec3 v2, vec3 v3, TGAImage& zbu
         vz[i] = static_cast<int>(v[i].z);
     }
 
-    draw_triangle(framebuffer, vx[0], vy[0],vz[0], vx[1], vy[1], vz[1], vx[2], vy[2], vz[2], zbuffer, random_color());
+    draw_triangle(framebuffer, vx[0], vy[0],vz[0], vx[1], vy[1], vz[1], vx[2], vy[2], vz[2], random_color());
 }
 
 int main(int argc, char** argv) {
     TGAImage framebuffer(width, height, TGAImage::RGB);
-    TGAImage zbuffer(width, height, TGAImage::GRAYSCALE);
 
     Parser object_parser = Parser();
 
-    int ax =  7, ay =  3;
-    int bx = 12, by = 37;
-    int cx = 62, cy = 53;
+    constexpr vec3 eye{-1, 0, 2};
+    constexpr vec3 center{0,0,0};
+    constexpr vec3 up{0, 1, 0};
 
-    // draw_triangle(framebuffer,  7, 45, 35, 100, 45,  60, red);
-    // draw_triangle(framebuffer, 120, 35, 90,   5, 45, 110, white);
-    // draw_triangle(framebuffer, 115, 83, 80,  90, 85, 120, green);
+    lookat(eye, center, up);
+    perspective(norm(eye - center));
+    viewport(width / 16, height / 16, width * 7 / 8, height * 7 / 8);
 
-    // framebuffer.set(ax, ay, white);
-    // framebuffer.set(bx, by, white);
-    // framebuffer.set(cx, cy, white);
-
-    object_parser.load("./diablo3_pose.obj");
-    // object_parser.load("./african_head.obj");
+    // object_parser.load("./diablo3_pose.obj");
+    object_parser.load("./african_head.obj");
 
     for (Vec3f triangle : object_parser.faces) {
         draw_object(framebuffer, object_parser.vertices[triangle.v0],
-             object_parser.vertices[triangle.v1], object_parser.vertices[triangle.v2]
-            , zbuffer);
+             object_parser.vertices[triangle.v1], object_parser.vertices[triangle.v2]);
     }
     
-    // draw_line(framebuffer, ax, ay, bx, by, blue);
-    // draw_line(framebuffer, ax, ay, cx, cy, red);
-    // draw_line(framebuffer, cx, cy, bx, by, green);
-
-    // std::srand(std::time({}));
-    // for (int i=0; i<(1<<24); i++) {
-    //     int ax = rand()%width, ay = rand()%height;
-    //     int bx = rand()%width, by = rand()%height;
-    //     draw_line(framebuffer, ax, ay, bx, by, { static_cast<uint8_t>(rand()%255), static_cast<uint8_t>(rand()%255), static_cast<uint8_t>(rand()%255), static_cast<uint8_t>(rand()%255) });
-    // }
-
     framebuffer.write_tga_file("framebuffer.tga");
-    zbuffer.write_tga_file("zbuffer.tga");
     return 0;
 }
