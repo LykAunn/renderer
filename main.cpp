@@ -13,6 +13,19 @@ std::vector<double> zbuffer(width * height, -std::numeric_limits<double>::max())
 
 mat<4,4> ModelView, Viewport, Perspective;
 
+template <int n>
+vec<n> operator*(const vec<n>& vector, const mat<n, n>& matrix) {
+    vec<n> res;
+    for (int i = 0; i < n; i++) {
+        double sum = 0.0;
+        for (int j = 0; j < n; j++) {
+            sum += matrix[i][j] * vector[i];            
+        }
+        res[i] = sum;
+    }
+    return res;
+}
+
 void set_zbuffer(int x, int y, double val) {
     int index = y * width + x;
     zbuffer[index] = val;
@@ -41,32 +54,8 @@ constexpr TGAColor red     = {  0,   0, 255, 255};
 constexpr TGAColor blue    = {255, 128,  64, 255};
 constexpr TGAColor yellow  = {  0, 200, 255, 255};
 
-vec3 rot(vec3 vector) {
-    const double a = M_PI / 1.0;
-    const double c = std::cos(a);
-    const double s = std::sin(a);
-
-    mat3 Ry;
-    Ry[0] = vec3{ c, 0.0, s };
-    Ry[1] = vec3{ 0.0, 1.0, 0.0 };
-    Ry[2] = vec3{ -s, 0.0, c };
-
-    return Ry * vector;
-}
-
-vec3 persp(vec3 v) {
-    const double c = 3;
-    return v / (1 - v.z / c);
-}
-
 void perspective(const double f) {
     Perspective = {{{1, 0, 0, 0}, {0, 1, 0, 0}, {0, 0, 1, 0}, {0, 0, -1/f, 1}}};
-}
-
-vec3 project(vec3 v) {
-    return { (v.x + 1.) * width / 2,
-             (v.y + 1.) * height / 2,
-             (v.z + 1.) * 255./2 };
 }
 
 void viewport(const double x, const double y, const double w, const double h) {
@@ -115,38 +104,73 @@ void draw_triangle(TGAImage& framebuffer, float x1, float y1, float z1, float x2
     }
 }
 
-void draw_object(TGAImage& framebuffer, vec3 v1, vec3 v2, vec3 v3) {
-    vec3 v[3] = {v1, v2, v3};
+void draw_object(TGAImage& framebuffer, vec3 v1, vec3 v2, vec3 v3, const mat4& MVP) {
+    // Promote to 4D
+    vec4 v[3] = {
+        {v1.x, v1.y, v1.z, 1.0}, 
+        {v2.x, v2.y, v2.z, 1.0}, 
+        {v3.x, v3.y, v3.z, 1.0}
+    };
     float vx[3], vy[3], vz[3];
+
+    // Perform transformations
     for (int i = 0; i < 3; i ++) {
-        v[i] = project(persp(rot(v[i])));
+        v[i] = MVP * v[i];
+        
+        // Perspective divide
+        for (int j = 0; j < 3; j ++) {
+            v[i][j] = v[i][j] / v[i][3]; // Divide own component with W component
+        }
+        v[i][3] = 1.0;
+        
+        // Map to screen pixels
+        v[i] = v[i] * Viewport;
+        
         vx[i] = v[i].x;
         vy[i] = v[i].y;
         vz[i] = v[i].z;
     }
-
+    
     draw_triangle(framebuffer, vx[0], vy[0],vz[0], vx[1], vy[1], vz[1], vx[2], vy[2], vz[2], random_color());
 }
 
 int main(int argc, char** argv) {
     TGAImage framebuffer(width, height, TGAImage::RGB);
-
+    
     Parser object_parser = Parser();
-
-    constexpr vec3 eye{-1, 0, 2};
-    constexpr vec3 center{0,0,0};
+    
+    constexpr vec3 eye{0, 0, 2};
+    constexpr vec3 center{0, 0, 0};
     constexpr vec3 up{0, 1, 0};
-
+    
     lookat(eye, center, up);
     perspective(norm(eye - center));
     viewport(width / 16, height / 16, width * 7 / 8, height * 7 / 8);
+
+    // Shrink the model to 50% size
+    mat<4,4> Scale = {{{0.5, 0, 0, 0}, 
+                    {0, 0.5, 0, 0}, 
+                    {0, 0, 0.5, 0}, 
+                    {0, 0, 0, 1}}};
+
+    // Positive X moves right, Positive Y moves up
+    double dx = 0.5; // Shift right by 0.5 units
+    double dy = 0.5; // Shift up by 0.5 units
+    double dz = 0.0;
+
+    mat<4,4> Translation = {{{1, 0, 0, dx}, 
+                            {0, 1, 0, dy}, 
+                            {0, 0, 1, dz}, 
+                            {0, 0, 0, 1}}};
+                   
+    mat4 MVP = Perspective * ModelView * Translation * Scale ;
 
     object_parser.load("./diablo3_pose.obj");
     // object_parser.load("./african_head.obj");
 
     for (Vec3f triangle : object_parser.faces) {
         draw_object(framebuffer, object_parser.vertices[triangle.v0],
-             object_parser.vertices[triangle.v1], object_parser.vertices[triangle.v2]);
+             object_parser.vertices[triangle.v1], object_parser.vertices[triangle.v2], MVP);
     }
     
     framebuffer.write_tga_file("framebuffer.tga");
