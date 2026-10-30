@@ -20,8 +20,15 @@ template<> struct vec<3> {
     double  operator[](const int i) const { assert(i >= 0 && i < 3); return i ? (1 == i ? y : z) : x;}
 };
 
+template<> struct vec<4> {
+    double x = 0 , y = 0, z = 0, w = 0;
+    double& operator[](const int i)       { assert(i >= 0 && i < 4); return i ? (1 == i ? y : (2 == i ? z : w)) : x;}
+    double  operator[](const int i) const { assert(i >= 0 && i < 4); return i ? (1 == i ? y : (2 == i ? z : w)) : x;}
+};
+
 // Alias
 typedef vec<3> vec3;
+typedef vec<4> vec4;
 
 template <int n>
 vec<n> operator+(const vec<n>& left, const vec<n>& right) {
